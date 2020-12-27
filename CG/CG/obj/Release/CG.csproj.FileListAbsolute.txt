@@ -1,0 +1,12 @@
+C:\Student_work\Курсовая работа 2020\CG\CG\bin\Release\CG.exe.config
+C:\Student_work\Курсовая работа 2020\CG\CG\bin\Release\CG.exe
+C:\Student_work\Курсовая работа 2020\CG\CG\bin\Release\CG.pdb
+C:\Student_work\Курсовая работа 2020\CG\CG\bin\Release\SimplexNoise.dll
+C:\Student_work\Курсовая работа 2020\CG\CG\obj\Release\CG.csprojAssemblyReference.cache
+C:\Student_work\Курсовая работа 2020\CG\CG\obj\Release\CG.mainForm.resources
+C:\Student_work\Курсовая работа 2020\CG\CG\obj\Release\CG.Properties.Resources.resources
+C:\Student_work\Курсовая работа 2020\CG\CG\obj\Release\CG.csproj.GenerateResource.cache
+C:\Student_work\Курсовая работа 2020\CG\CG\obj\Release\CG.csproj.CoreCompileInputs.cache
+C:\Student_work\Курсовая работа 2020\CG\CG\obj\Release\CG.csproj.CopyComplete
+C:\Student_work\Курсовая работа 2020\CG\CG\obj\Release\CG.exe
+C:\Student_work\Курсовая работа 2020\CG\CG\obj\Release\CG.pdb
