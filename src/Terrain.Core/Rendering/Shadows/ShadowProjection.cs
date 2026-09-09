@@ -17,7 +17,7 @@ public sealed record ShadowProjection(Vector3 Right, Vector3 Up, Vector3 ToLight
         var max = new Vector3(float.NegativeInfinity);
         foreach (var vertex in mesh.Vertices)
         {
-            var p = scene.WorldPosition(vertex.Position);
+            var p = scene.WorldVertexPosition(vertex);
             var q = new Vector3(Vector3.Dot(p, right), Vector3.Dot(p, up), -Vector3.Dot(p, light));
             min = Vector3.Min(min, q);
             max = Vector3.Max(max, q);

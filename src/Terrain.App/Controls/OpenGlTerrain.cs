@@ -1,3 +1,4 @@
+using System.Numerics;
 using Terrain.App.Rendering.OpenGl;
 using Terrain.Core.Rendering.Shadows;
 using System.Diagnostics;
@@ -21,6 +22,11 @@ public sealed class OpenGlTerrain : OpenGlControlBase
         get; private set;
     }
     private int bufferWidth, bufferHeight;
+    private (Mesh? Mesh, float Scale, float X, float Y, float Z, bool Walking, ShadowProjection? Shadow) uploaded;
+    public int GeometryUploadCount
+    {
+        get; private set;
+    }
     private string? failure;
     public Mesh? Mesh
     {
@@ -31,6 +37,10 @@ public sealed class OpenGlTerrain : OpenGlControlBase
     {
         get; set;
     }
+    public double LastFrameMilliseconds
+    {
+        get; private set;
+    }
     public event Action<string>? Status;
     public event Action<Frame>? Captured;
 
@@ -39,16 +49,30 @@ public sealed class OpenGlTerrain : OpenGlControlBase
         try
         {
             api = new(gl);
+            uploaded = default;
             uint vertex = api.Compile(0x8B31, """
                 #version 150
                 in vec3 aPosition;
+                uniform vec3 cameraPosition;
+                uniform vec3 cameraRight;
+                uniform vec3 cameraUp;
+                uniform vec3 cameraBack;
+                uniform vec3 projection;
+                uniform vec3 panAspect;
                 in vec3 aNormal;
                 in vec3 aColor;
                 in vec3 aShadow;
                 out vec3 normal;
                 out vec3 color;
                 out vec3 shadowPosition;
-                void main() { gl_Position = vec4(aPosition, 1.0); normal = aNormal; color = aColor; shadowPosition = aShadow; }
+                void main() {
+                    vec3 delta = aPosition - cameraPosition;
+                    vec3 view = vec3(dot(delta,cameraRight),dot(delta,cameraUp),dot(delta,cameraBack));
+                    float distance = -view.z;
+                    gl_Position = vec4((view.x*projection.x+panAspect.x*distance)/panAspect.z,
+                        view.y*projection.x+panAspect.y*distance,projection.y*distance-projection.z,distance);
+                    normal = aNormal; color = aColor; shadowPosition = aShadow;
+                }
                 """);
             uint fragment = 0;
             try
@@ -59,10 +83,21 @@ public sealed class OpenGlTerrain : OpenGlControlBase
                     in vec3 color;
                     in vec3 shadowPosition;
                     uniform vec3 light;
+                    uniform vec3 fog;
+                    uniform vec3 fogColor;
+                    uniform vec3 fogViewport;
+                    uniform vec3 fogPan;
+                    uniform vec3 worldLighting;
+                    uniform vec3 cloudState;
+                    uniform vec3 cameraPosition;
+                    uniform vec3 cameraRight;
+                    uniform vec3 cameraUp;
+                    uniform vec3 cameraBack;
                     uniform sampler2D shadowMap;
                     uniform int shadowsEnabled;
                     uniform int softShadows;
                     out vec4 outputColor;
+                    """ + WorldSkyShader.Functions + """
                     float visibility(float nDotL, vec2 depthGradient) {
                         vec3 p = shadowPosition;
                         if (shadowsEnabled == 0 || p.x < 0.0 || p.x >= 1.0 || p.y < 0.0 || p.y >= 1.0 || p.z < 0.0 || p.z > 1.0) return 1.0;
@@ -90,7 +125,18 @@ public sealed class OpenGlTerrain : OpenGlControlBase
                         vec3 plane = cross(dFdx(shadowPosition), dFdy(shadowPosition));
                         vec2 gradient = abs(plane.z) > length(plane) * 1e-5 ? -plane.xy / plane.z : vec2(0.0);
                         float intensity = 0.3 + 0.7 * max(0.0, nDotL) * visibility(nDotL, gradient);
-                        outputColor = vec4(clamp(color * intensity, 0.0, 1.0), 1.0);
+                        vec3 shaded = clamp(color * intensity, 0.0, 1.0) * worldLighting.y;
+                        vec2 ndc = gl_FragCoord.xy / fogViewport.xy * 2.0 - 1.0;
+                        vec3 view = vec3((ndc.x * fogViewport.z - fogPan.x) / fog.y,
+                            (ndc.y - fogPan.y) / fog.y, 1.0) / gl_FragCoord.w;
+                        float amount = 1.0 - exp(-fog.x * max(0.0, length(view) - 0.3));
+                        vec3 atmosphere = fogColor;
+                        if (worldLighting.x > 0.0) {
+                            amount = smoothstep(fog.z * .45, fog.z, length(view));
+                            vec3 ray = normalize(cameraRight * view.x + cameraUp * view.y - cameraBack * view.z);
+                            atmosphere = cloudyWorldSky(ray,cameraPosition,worldLighting.z,1.0/fogViewport.y/fog.y,cloudState);
+                        }
+                        outputColor = vec4(mix(shaded, atmosphere, amount), 1.0);
                     }
                     """);
                 program = api.Load<GlApi.CreateProgram>("glCreateProgram")();
@@ -172,39 +218,65 @@ public sealed class OpenGlTerrain : OpenGlControlBase
                 api.Load<GlApi.One>("glDisable")(0x0B71);
                 api.Load<GlApi.One>("glBindVertexArray")(vao);
                 api.Load<GlApi.One>("glUseProgram")(skyProgram);
+                api.Load<GlApi.Uniform3>("glUniform3f")(api.Load<GlApi.Location>("glGetUniformLocation")(skyProgram, "worldClock"), Scene.WorldTime ?? -1, 0, 0);
+                var cloudState = Terrain.Core.World.WorldClouds.Parameters(Scene.CloudSeed, Scene.CloudTime);
+                var skyCamera = Scene.ViewCamera.Position;
+                api.Load<GlApi.Uniform3>("glUniform3f")(api.Load<GlApi.Location>("glGetUniformLocation")(skyProgram, "cloudState"), cloudState.X, cloudState.Y, cloudState.Z);
+                api.Load<GlApi.Uniform3>("glUniform3f")(api.Load<GlApi.Location>("glGetUniformLocation")(skyProgram, "skyCamera"), skyCamera.X, skyCamera.Y, skyCamera.Z);
+                var marker = Scene.SkySun;
+                api.Load<GlApi.Uniform3>("glUniform3f")(api.Load<GlApi.Location>("glGetUniformLocation")(skyProgram, "sun"), marker.X, marker.Y, marker.Z);
                 var sun = Scene.LightDirection;
                 api.Load<GlApi.Uniform3>("glUniform3f")(api.Load<GlApi.Location>("glGetUniformLocation")(skyProgram, "light"), sun.X, sun.Y, sun.Z);
-                api.Load<GlApi.Uniform3>("glUniform3f")(api.Load<GlApi.Location>("glGetUniformLocation")(skyProgram, "viewport"), width, height, 0);
+                api.Load<GlApi.Uniform3>("glUniform3f")(api.Load<GlApi.Location>("glGetUniformLocation")(skyProgram, "viewport"), width, height, CameraPose.FocalLength * Scene.Zoom);
+                api.Load<GlApi.UniformInt>("glUniform1i")(api.Load<GlApi.Location>("glGetUniformLocation")(skyProgram, "walking"), Scene.Walking ? 1 : 0);
+                void SkyVector(string name, System.Numerics.Vector3 axis)
+                {
+                    var vector = Scene.ViewCamera.WorldDirection(axis);
+                    api.Load<GlApi.Uniform3>("glUniform3f")(api.Load<GlApi.Location>("glGetUniformLocation")(skyProgram, name), vector.X, vector.Y, vector.Z);
+                }
+                SkyVector("skyRight", System.Numerics.Vector3.UnitX);
+                SkyVector("skyUp", System.Numerics.Vector3.UnitY);
+                SkyVector("skyForward", -System.Numerics.Vector3.UnitZ);
                 api.Load<GlApi.DrawArrays>("glDrawArrays")(0x0004, 0, 3);
                 api.Load<GlApi.One>("glEnable")(0x0B71);
             }
             api.Load<GlApi.One>("glUseProgram")(program);
             api.Load<GlApi.One>("glBindVertexArray")(vao);
-            var projected = Scene.Project(Mesh, (float)width / height, Scene.Shadows ? shadowProjection : null);
-            var packed = new float[projected.Length * 12];
-            for (int i = 0; i < projected.Length; i++)
+            var geometryKey = (Mesh, Scene.HeightScale, Scene.RotationX, Scene.RotationY, Scene.RotationZ, Scene.Walking, Scene.Shadows ? shadowProjection : null);
+            if (uploaded != geometryKey)
             {
-                var v = projected[i];
-                int j = i * 12;
-                packed[j] = v.Position.X;
-                packed[j + 1] = v.Position.Y;
-                packed[j + 2] = v.Position.Z;
-                packed[j + 3] = v.Normal.X;
-                packed[j + 4] = v.Normal.Y;
-                packed[j + 5] = v.Normal.Z;
-                packed[j + 6] = v.Color.X;
-                packed[j + 7] = v.Color.Y;
-                packed[j + 8] = v.Color.Z;
-                packed[j + 9] = v.ShadowPosition.X;
-                packed[j + 10] = v.ShadowPosition.Y;
-                packed[j + 11] = v.ShadowPosition.Z;
+                var packed = new float[Mesh.Vertices.Length * 12];
+                for (int i = 0; i < Mesh.Vertices.Length; i++)
+                {
+                    var vertex = Mesh.Vertices[i];
+                    var world = Scene.WorldVertexPosition(vertex);
+                    var normal = Scene.WorldNormal(vertex);
+                    var shadow = Scene.Shadows ? shadowProjection!.Project(world) : Vector3.Zero;
+                    int j = i * 12;
+                    packed[j] = world.X;
+                    packed[j + 1] = world.Y;
+                    packed[j + 2] = world.Z;
+                    packed[j + 3] = normal.X;
+                    packed[j + 4] = normal.Y;
+                    packed[j + 5] = normal.Z;
+                    packed[j + 6] = vertex.Color.X;
+                    packed[j + 7] = vertex.Color.Y;
+                    packed[j + 8] = vertex.Color.Z;
+                    packed[j + 9] = shadow.X;
+                    packed[j + 10] = shadow.Y;
+                    packed[j + 11] = shadow.Z;
+                }
+                api.Load<GlApi.Bind>("glBindBuffer")(0x8892, vbo);
+                fixed (float* pointer = packed)
+                    api.Load<GlApi.BufferData>("glBufferData")(0x8892, packed.Length * sizeof(float), pointer, 0x88E4);
+                api.Load<GlApi.Bind>("glBindBuffer")(0x8893, ebo);
+                fixed (int* pointer = Mesh.Indices)
+                    api.Load<GlApi.BufferData>("glBufferData")(0x8893, Mesh.Indices.Length * sizeof(int), pointer, 0x88E4);
+                uploaded = geometryKey;
+                GeometryUploadCount++;
             }
             api.Load<GlApi.Bind>("glBindBuffer")(0x8892, vbo);
-            fixed (float* pointer = packed)
-                api.Load<GlApi.BufferData>("glBufferData")(0x8892, packed.Length * sizeof(float), pointer, 0x88E0);
             api.Load<GlApi.Bind>("glBindBuffer")(0x8893, ebo);
-            fixed (int* pointer = Mesh.Indices)
-                api.Load<GlApi.BufferData>("glBufferData")(0x8893, Mesh.Indices.Length * sizeof(int), pointer, 0x88E0);
             string[] attributes = ["aPosition", "aNormal", "aColor", "aShadow"];
             for (int i = 0; i < attributes.Length; i++)
             {
@@ -212,6 +284,22 @@ public sealed class OpenGlTerrain : OpenGlControlBase
                 api.Load<GlApi.One>("glEnableVertexAttribArray")(location);
                 api.Load<GlApi.Attribute>("glVertexAttribPointer")(location, 3, 0x1406, 0, 12 * sizeof(float), i * 3 * sizeof(float));
             }
+            void Uniform(string name, Vector3 value) => api.Load<GlApi.Uniform3>("glUniform3f")(
+                api.Load<GlApi.Location>("glGetUniformLocation")(program, name), value.X, value.Y, value.Z);
+            var camera = Scene.ViewCamera;
+            Uniform("cameraPosition", camera.Position);
+            Uniform("cloudState", Terrain.Core.World.WorldClouds.Parameters(Scene.CloudSeed, Scene.CloudTime));
+            Uniform("cameraRight", camera.WorldDirection(Vector3.UnitX));
+            Uniform("cameraUp", camera.WorldDirection(Vector3.UnitY));
+            Uniform("cameraBack", camera.WorldDirection(Vector3.UnitZ));
+            float near = Scene.NearDistance, far = CameraPose.Far;
+            Uniform("projection", new(CameraPose.FocalLength * Scene.Zoom, (far + near) / (far - near), 2 * far * near / (far - near)));
+            Uniform("panAspect", new(Scene.PanX, Scene.PanY, (float)width / height));
+            Uniform("fog", new(Scene.FogDensity, CameraPose.FocalLength * Scene.Zoom, Scene.WorldViewDistance));
+            Uniform("fogColor", Scene.WorldTime is { } time ? Terrain.Core.World.DayNight.Horizon(time) : Atmosphere.Color(Scene.LightDirection));
+            Uniform("worldLighting", new(Scene.WorldTime.HasValue ? 1 : 0, Scene.WorldTime is { } t ? Terrain.Core.World.DayNight.Exposure(t) : 1, Scene.WorldTime ?? 0));
+            Uniform("fogViewport", new(width, height, (float)width / height));
+            Uniform("fogPan", new(Scene.PanX, Scene.PanY, 0));
             var light = Scene.LightDirection;
             api.Load<GlApi.Uniform3>("glUniform3f")(api.Load<GlApi.Location>("glGetUniformLocation")(program, "light"), light.X, light.Y, light.Z);
             api.Load<GlApi.One>("glActiveTexture")(0x84C0);
@@ -224,6 +312,7 @@ public sealed class OpenGlTerrain : OpenGlControlBase
             // Include completion, not just command submission, in the displayed frame time.
             api.Load<GlApi.Empty>("glFinish")();
             timer.Stop();
+            LastFrameMilliseconds = timer.Elapsed.TotalMilliseconds;
             Status?.Invoke($"OpenGL · {width}×{height} · кадр {timer.Elapsed.TotalMilliseconds:F1} мс" + (shadowRebuilt ? " · тени обновлены" : ""));
             if (CaptureRequested)
             {
@@ -270,7 +359,7 @@ public sealed class OpenGlTerrain : OpenGlControlBase
         var positions = new float[Mesh!.Vertices.Length * 3];
         for (int i = 0; i < Mesh.Vertices.Length; i++)
         {
-            var p = projection.Project(Scene.WorldPosition(Mesh.Vertices[i].Position)) * 2 - System.Numerics.Vector3.One;
+            var p = projection.Project(Scene.WorldVertexPosition(Mesh.Vertices[i])) * 2 - System.Numerics.Vector3.One;
             positions[i * 3] = p.X;
             positions[i * 3 + 1] = p.Y;
             positions[i * 3 + 2] = p.Z;

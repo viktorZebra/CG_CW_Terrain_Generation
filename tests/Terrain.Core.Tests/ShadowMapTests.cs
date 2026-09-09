@@ -34,8 +34,8 @@ public sealed class ShadowMapTests
         Near(a.Visibility(a.Projection.Project(original.WorldPosition(Vector3.Zero)), 1, false), 0);
         Near(b.Visibility(b.Projection.Project(rotated.WorldPosition(Vector3.Zero)), .5f, false), 1);
         Check(original.LightDirection == rotated.LightDirection);
-        var pa = original.Project(mesh, 1, a.Projection);
-        var pb = rotated.Project(mesh, 1, b.Projection);
+        var pa = original.Project(mesh, 1, a.Projection).Vertices;
+        var pb = rotated.Project(mesh, 1, b.Projection).Vertices;
         Check(pa[0].ShadowPosition != pb[0].ShadowPosition);
     }
 

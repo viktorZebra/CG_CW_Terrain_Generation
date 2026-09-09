@@ -7,18 +7,34 @@ namespace Terrain.Core.Rendering;
 /// <summary>Our own triangle rasterizer: edge functions, barycentric interpolation and Z-buffer.</summary>
 public static class SoftwareRenderer
 {
-    public static Frame Render(Vertex[] vertices, int[] indices, Vector3 light, int width, int height, ShadowMap? shadows = null, bool softShadows = true, bool showSky = false)
+    public static Frame Render(Vertex[] vertices, int[] indices, Vector3 light, int width, int height, ShadowMap? shadows = null, bool softShadows = true, bool showSky = false, Vector3? skySun = null, Scene? skyScene = null)
     {
         if (width <= 0 || height <= 0)
             throw new ArgumentOutOfRangeException(nameof(width));
         var pixels = new byte[checked(width * height * 4)];
         var depth = new float[width * height];
         Array.Fill(depth, float.PositiveInfinity);
+        var camera = skyScene?.ViewCamera ?? CameraPose.Default;
+        var right = camera.WorldDirection(Vector3.UnitX);
+        var up = camera.WorldDirection(Vector3.UnitY);
+        var forward = camera.WorldDirection(-Vector3.UnitZ);
         for (int i = 0; i < pixels.Length; i += 4)
         {
-            var color = showSky
-                ? SunPath.SkyColor((i / 4 % width + .5f) / width, (i / 4 / width + .5f) / height, (float)width / height, light, 1f / height)
-                : new Vector3(18, 23, 29) / 255;
+            Vector3 color;
+            if (showSky && skyScene?.WorldTime is { } time)
+            {
+                float x = (i / 4 % width + .5f) / width, y = (i / 4 / width + .5f) / height;
+                float focal = CameraPose.FocalLength * skyScene.Zoom;
+                var ray = Vector3.Normalize(right * ((2 * x - 1) * width / height / focal) + up * ((1 - 2 * y) / focal) + forward);
+                color = Terrain.Core.World.WorldClouds.Sky(ray, camera.Position, time, 1f / height / focal, skyScene.CloudSeed, skyScene.CloudTime);
+            }
+            else if (showSky && skyScene is { Walking: true })
+                color = SunPath.WalkingSkyColor((i / 4 % width + .5f) / width, (i / 4 / width + .5f) / height,
+                    (float)width / height, light, right, up, forward, CameraPose.FocalLength * skyScene.Zoom, 1f / height);
+            else
+                color = showSky
+                    ? SunPath.SkyColor((i / 4 % width + .5f) / width, (i / 4 / width + .5f) / height, (float)width / height, light, 1f / height, skySun)
+                    : new Vector3(18, 23, 29) / 255;
             pixels[i] = (byte)MathF.Round(color.Z * 255);
             pixels[i + 1] = (byte)MathF.Round(color.Y * 255);
             pixels[i + 2] = (byte)MathF.Round(color.X * 255);
@@ -65,6 +81,14 @@ public static class SoftwareRenderer
                     if (z < -1 || z > 1 || z >= depth[offset])
                         continue;
                     depth[offset] = z;
+                    // Attributes interpolate with 1/w; screen-space depth remains affine.
+                    wa *= vertices[ia].ReciprocalW;
+                    wb *= vertices[ib].ReciprocalW;
+                    wc *= vertices[ic].ReciprocalW;
+                    float total = wa + wb + wc;
+                    wa /= total;
+                    wb /= total;
+                    wc /= total;
                     var normal = vertices[ia].Normal * wa + vertices[ib].Normal * wb + vertices[ic].Normal * wc;
                     var color = vertices[ia].Color * wa + vertices[ib].Color * wb + vertices[ic].Color * wc;
                     float visibility = 1;
@@ -75,6 +99,20 @@ public static class SoftwareRenderer
                         visibility = shadows.Visibility(shadowPosition, nDotL, softShadows, depthGradient);
                     }
                     color = Vector3.Clamp(Scene.Shade(normal, color, light, visibility), Vector3.Zero, Vector3.One);
+                    if (skyScene?.WorldTime is { } worldTime)
+                    {
+                        color *= Terrain.Core.World.DayNight.Exposure(worldTime);
+                        float distance = Atmosphere.Distance((x + .5f) / width, (y + .5f) / height, (float)width / height, total, skyScene);
+                        float focal = CameraPose.FocalLength * skyScene.Zoom;
+                        var ray = Vector3.Normalize(right * (((2 * (x + .5f) / width - 1) * width / height) / focal)
+                            + up * ((1 - 2 * (y + .5f) / height) / focal) + forward);
+                        color = Vector3.Lerp(color, Terrain.Core.World.WorldClouds.Sky(ray, camera.Position, worldTime, 1f / height / focal, skyScene.CloudSeed, skyScene.CloudTime), Terrain.Core.World.DayNight.Fog(distance, skyScene.WorldViewDistance));
+                    }
+                    else if (skyScene is { FogDensity: > 0 })
+                    {
+                        float distance = Atmosphere.Distance((x + .5f) / width, (y + .5f) / height, (float)width / height, total, skyScene);
+                        color = Vector3.Lerp(color, Atmosphere.Color(light), Atmosphere.Amount(distance, skyScene.FogDensity));
+                    }
                     pixels[offset * 4] = (byte)MathF.Round(color.Z * 255);
                     pixels[offset * 4 + 1] = (byte)MathF.Round(color.Y * 255);
                     pixels[offset * 4 + 2] = (byte)MathF.Round(color.X * 255);

@@ -1,0 +1,19 @@
+World entry 1,04s; 535081 triangles
+M open/close, key-repeat guard, Escape, cursor release: PASS
+Entry, cancellation, exit and original editor restoration: PASS
+01-Forest: chunks=78, near=4, medium=12, cache=78, triangles=512456, prepare=808ms, GL-warm=2,5ms, CPU=715ms, mean BGRA=0,0311/255, heap=166513256 PASS
+02-Desert: chunks=72, near=6, medium=10, cache=134, triangles=433890, prepare=344ms, GL-warm=1,8ms, CPU=395ms, mean BGRA=0,0787/255, heap=132402632 PASS
+03-Winter: chunks=72, near=6, medium=10, cache=128, triangles=419575, prepare=326ms, GL-warm=1,6ms, CPU=229ms, mean BGRA=0,0014/255, heap=105543064 PASS
+04-Swamp: chunks=74, near=6, medium=10, cache=144, triangles=579215, prepare=375ms, GL-warm=2,1ms, CPU=459ms, mean BGRA=0,0342/255, heap=198082272 PASS
+05-Steppe: chunks=78, near=4, medium=12, cache=144, triangles=411715, prepare=291ms, GL-warm=1,8ms, CPU=234ms, mean BGRA=0,0023/255, heap=120054112 PASS
+06-sunset: chunks=78, near=4, medium=12, cache=144, triangles=504779, prepare=286ms, GL-warm=1,7ms, CPU=386ms, mean BGRA=0,0007/255, heap=173876480 PASS
+07-moon-stars: chunks=78, near=4, medium=12, cache=144, triangles=512456, prepare=42ms, GL-warm=1,8ms, CPU=222ms, mean BGRA=0,0000/255, heap=180605680 PASS
+08-turn-behind: chunks=78, near=4, medium=12, cache=144, triangles=492114, prepare=67ms, GL-warm=2,0ms, CPU=292ms, mean BGRA=0,0830/255, heap=167131872 PASS
+10-clouds-day: chunks=78, near=4, medium=12, cache=144, triangles=512456, prepare=65ms, GL-warm=1,9ms, CPU=230ms, mean BGRA=0,0000/255, heap=180857624 PASS
+11-clouds-moved: chunks=78, near=4, medium=12, cache=144, triangles=512456, prepare=3ms, GL-warm=1,7ms, CPU=231ms, mean BGRA=0,0000/255, heap=181068104 PASS
+12-clouds-night: chunks=78, near=4, medium=12, cache=144, triangles=512456, prepare=4ms, GL-warm=1,8ms, CPU=239ms, mean BGRA=0,0000/255, heap=181051720 PASS
+13-clouds-evening: chunks=78, near=4, medium=12, cache=144, triangles=504779, prepare=34ms, GL-warm=1,7ms, CPU=247ms, mean BGRA=0,0000/255, heap=173894928 PASS
+14-winter-river: chunks=71, near=4, medium=11, cache=142, triangles=383604, prepare=259ms, GL-warm=2,2ms, CPU=301ms, mean BGRA=0,0015/255, heap=118103808 PASS
+15-winter-upland: chunks=72, near=6, medium=11, cache=139, triangles=432769, prepare=175ms, GL-warm=2,1ms, CPU=268ms, mean BGRA=0,0042/255, heap=116757136 PASS
+Cloud animation without geometry upload or shadow rebuild: PASS
+PASS

@@ -15,7 +15,7 @@ public sealed class ShadowMap(ShadowProjection projection, int size, float[] dep
         if (scene.ShadowResolution < 16 || scene.ShadowResolution > 4096)
             throw new ArgumentOutOfRangeException(nameof(scene.ShadowResolution));
         var projection = ShadowProjection.Create(mesh, scene);
-        var points = mesh.Vertices.Select(v => projection.Project(scene.WorldPosition(v.Position))).ToArray();
+        var points = mesh.Vertices.Select(v => projection.Project(scene.WorldVertexPosition(v))).ToArray();
         return new(projection, scene.ShadowResolution, SoftwareRenderer.RenderDepth(points, mesh.Indices, scene.ShadowResolution));
     }
 

@@ -7,7 +7,11 @@
     <Project Path="tests/Terrain.Core.Tests/Terrain.Core.Tests.csproj" />
     <Project Path="tests/Terrain.App.SmokeTests/Terrain.App.SmokeTests.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Terrain.Gallery/Terrain.Gallery.csproj" />
+  </Folder>
   <Folder Name="/Solution Items/">
+    <File Path="VISUAL_UPGRADE_PLAN.md" />
     <File Path="README.md" />
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />
