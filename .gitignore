@@ -1,32 +1,14 @@
-# Prerequisites
-*.d
-
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Compiled Dynamic libraries
-*.so
-*.dylib
-
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
+# Build output and IDE-local state
+**/bin/
+**/obj/
+.idea/
+.vs/
+.vscode/
+*.user
+*.suo
+*.sln.DotSettings.user
+.DS_Store
+TestResults/
+artifacts/
+*.nupkg
+*.snupkg

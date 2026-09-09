@@ -1,0 +1,10 @@
+{
+  "generator": "DiamondSquare",
+  "size": 513,
+  "seed": 2026,
+  "roughness": 0.6,
+  "smooth": true,
+  "valley": false,
+  "heightmap": "mountains-2026-heightmap.png",
+  "preview": "../../Примеры/Generated/mountains-2026-preview.png"
+}

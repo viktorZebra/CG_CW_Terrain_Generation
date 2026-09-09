@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Terrain.Core/Terrain.Core.csproj" />
+    <Project Path="src/Terrain.App/Terrain.App.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Terrain.Core.Tests/Terrain.Core.Tests.csproj" />
+    <Project Path="tests/Terrain.App.SmokeTests/Terrain.App.SmokeTests.csproj" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path="README.md" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="global.json" />
+    <File Path=".editorconfig" />
+  </Folder>
+</Solution>
